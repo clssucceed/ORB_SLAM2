@@ -306,18 +306,18 @@ void Tracking::Track()
 
                 if(mVelocity.empty() || mCurrentFrame.mnId<mnLastRelocFrameId+2)
                 {
-                    bOK = TrackReferenceKeyFrame();
+                    bOK = TrackReferenceKeyFrame(); // cf vs kf
                 }
                 else
                 {
-                    bOK = TrackWithMotionModel();
+                    bOK = TrackWithMotionModel(); // cf vs pf
                     if(!bOK)
                         bOK = TrackReferenceKeyFrame();
                 }
             }
             else
             {
-                bOK = Relocalization();
+                bOK = Relocalization(); // cf vs global map
             }
         }
         else
@@ -398,7 +398,7 @@ void Tracking::Track()
         if(!mbOnlyTracking)
         {
             if(bOK)
-                bOK = TrackLocalMap();
+                bOK = TrackLocalMap(); // cf vs local map. Question: why is needed?
         }
         else
         {

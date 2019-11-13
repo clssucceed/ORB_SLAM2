@@ -536,6 +536,8 @@ void ExtractorNode::DivideNode(ExtractorNode &n1, ExtractorNode &n2, ExtractorNo
 
 }
 
+// 对包含多个点的grid不断四等分直到grid只有一个点或者等分出nFeatures个grid(优先等分点数较多的grid)，最后从每个grid中找出response最强的特征
+// 这种策略使得强纹理区域特征相对较多，弱文理区域特征相对较少（但是，局部来说，分布还是均匀的），符合直观认知
 vector<cv::KeyPoint> ORBextractor::DistributeOctTree(const vector<cv::KeyPoint>& vToDistributeKeys, const int &minX,
                                        const int &maxX, const int &minY, const int &maxY, const int &N, const int &level)
 {
@@ -768,8 +770,10 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
 
     const float W = 30;
 
+    // why multiple levels 
     for (int level = 0; level < nlevels; ++level)
     {
+        // magic number 3
         const int minBorderX = EDGE_THRESHOLD-3;
         const int minBorderY = minBorderX;
         const int maxBorderX = mvImagePyramid[level].cols-EDGE_THRESHOLD+3;
@@ -786,6 +790,7 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
         const int wCell = ceil(width/nCols);
         const int hCell = ceil(height/nRows);
 
+        // extract points for each grid
         for(int i=0; i<nRows; i++)
         {
             const float iniY =minBorderY+i*hCell;
@@ -799,13 +804,14 @@ void ORBextractor::ComputeKeyPointsOctTree(vector<vector<KeyPoint> >& allKeypoin
             for(int j=0; j<nCols; j++)
             {
                 const float iniX =minBorderX+j*wCell;
-                float maxX = iniX+wCell+6;
+                float maxX = iniX+wCell+6; // why 6
                 if(iniX>=maxBorderX-6)
                     continue;
                 if(maxX>maxBorderX)
                     maxX = maxBorderX;
 
                 vector<cv::KeyPoint> vKeysCell;
+                // extract enough fast points with iniThFast
                 FAST(mvImagePyramid[level].rowRange(iniY,maxY).colRange(iniX,maxX),
                      vKeysCell,iniThFAST,true);
 

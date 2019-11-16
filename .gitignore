@@ -24,3 +24,7 @@ lib/
 
 
 \.vscode/
+
+doc/html/
+
+doc/latex/

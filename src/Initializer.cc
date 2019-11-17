@@ -48,6 +48,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     // Reference Frame: 1, Current Frame: 2
     mvKeys2 = CurrentFrame.mvKeysUn;
 
+    // 根据传入的vMatches12维护mvMatches12和mvbMatched1(后面保持不变)
     mvMatches12.clear();
     mvMatches12.reserve(mvKeys2.size());
     mvbMatched1.resize(mvKeys1.size());
@@ -79,6 +80,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
 
     DUtils::Random::SeedRandOnce(0);
 
+    // 随机生成mMaxIterations组点集（每组８个不重复的点）保存在mvSets中
     for(int it=0; it<mMaxIterations; it++)
     {
         vAvailableIndices = vAllIndices;
@@ -91,6 +93,7 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
 
             mvSets[it][j] = idx;
 
+            // 保证每组选出8个点不重复
             vAvailableIndices[randi] = vAvailableIndices.back();
             vAvailableIndices.pop_back();
         }
@@ -112,6 +115,8 @@ bool Initializer::Initialize(const Frame &CurrentFrame, const vector<int> &vMatc
     float RH = SH/(SH+SF);
 
     // Try to reconstruct from homography or fundamental depending on the ratio (0.40-0.45)
+    // magic number 1.0(parallax th)???
+    // magic number 50(successfully triangulated points number th)???
     if(RH>0.40)
         return ReconstructH(vbMatchesInliersH,H,mK,R21,t21,vP3D,vbTriangulated,1.0,50);
     else //if(pF_HF>0.6)
@@ -126,7 +131,7 @@ void Initializer::FindHomography(vector<bool> &vbMatchesInliers, float &score, c
     // Number of putative matches
     const int N = mvMatches12.size();
 
-    // Normalize coordinates
+    // Normalize coordinates (for normalized DLT)
     vector<cv::Point2f> vPn1, vPn2;
     cv::Mat T1, T2;
     Normalize(mvKeys1,vPn1, T1);
@@ -177,7 +182,7 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
     // Number of putative matches
     const int N = vbMatchesInliers.size();
 
-    // Normalize coordinates
+    // Normalize coordinates (for normalized DLT)
     vector<cv::Point2f> vPn1, vPn2;
     cv::Mat T1, T2;
     Normalize(mvKeys1,vPn1, T1);
@@ -222,7 +227,7 @@ void Initializer::FindFundamental(vector<bool> &vbMatchesInliers, float &score, 
     }
 }
 
-
+/// DLT for H (8 points)
 cv::Mat Initializer::ComputeH21(const vector<cv::Point2f> &vP1, const vector<cv::Point2f> &vP2)
 {
     const int N = vP1.size();
@@ -265,6 +270,7 @@ cv::Mat Initializer::ComputeH21(const vector<cv::Point2f> &vP1, const vector<cv:
     return vt.row(8).reshape(0, 3);
 }
 
+/// DLT for F (8 points)
 cv::Mat Initializer::ComputeF21(const vector<cv::Point2f> &vP1,const vector<cv::Point2f> &vP2)
 {
     const int N = vP1.size();
@@ -295,6 +301,7 @@ cv::Mat Initializer::ComputeF21(const vector<cv::Point2f> &vP1,const vector<cv::
 
     cv::Mat Fpre = vt.row(8).reshape(0, 3);
 
+    // singularity constraint: refer to mvg sect11.1.1 
     cv::SVDecomp(Fpre,w,u,vt,cv::SVD::MODIFY_A | cv::SVD::FULL_UV);
 
     w.at<float>(2)=0;
@@ -330,6 +337,7 @@ float Initializer::CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vecto
 
     float score = 0;
 
+    // 2自由度卡方检验，95%
     const float th = 5.991;
 
     const float invSigmaSquare = 1.0/(sigma*sigma);
@@ -360,7 +368,7 @@ float Initializer::CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vecto
         if(chiSquare1>th)
             bIn = false;
         else
-            score += th - chiSquare1;
+            score += th - chiSquare1; // as paper equation (2)
 
         // Reprojection error in second image
         // x1in2 = H21*x1
@@ -376,8 +384,9 @@ float Initializer::CheckHomography(const cv::Mat &H21, const cv::Mat &H12, vecto
         if(chiSquare2>th)
             bIn = false;
         else
-            score += th - chiSquare2;
+            score += th - chiSquare2; // as paper equation (2)
 
+        // 只要一张图片的重投影误差大于阈值就判断为outlier
         if(bIn)
             vbMatchesInliers[i]=true;
         else
@@ -422,9 +431,10 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
         const float u2 = kp2.pt.x;
         const float v2 = kp2.pt.y;
 
-        // Reprojection error in second image
+        // Reprojection error in second image (point to line)
         // l2=F21x1=(a2,b2,c2)
 
+        // calculate epi-line in image 2
         const float a2 = f11*u1+f12*v1+f13;
         const float b2 = f21*u1+f22*v1+f23;
         const float c2 = f31*u1+f32*v1+f33;
@@ -438,9 +448,9 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
         if(chiSquare1>th)
             bIn = false;
         else
-            score += thScore - chiSquare1;
+            score += thScore - chiSquare1; // as paper equation (2)
 
-        // Reprojection error in second image
+        // Reprojection error in first image
         // l1 =x2tF21=(a1,b1,c1)
 
         const float a1 = f11*u2+f21*v2+f31;
@@ -456,8 +466,9 @@ float Initializer::CheckFundamental(const cv::Mat &F21, vector<bool> &vbMatchesI
         if(chiSquare2>th)
             bIn = false;
         else
-            score += thScore - chiSquare2;
+            score += thScore - chiSquare2; // as paper equation (2)
 
+        // 只要一张图片的重投影误差大于阈值就判断为outlier
         if(bIn)
             vbMatchesInliers[i]=true;
         else
@@ -481,12 +492,13 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     cv::Mat R1, R2, t;
 
     // Recover the 4 motion hypotheses
+    // mvg sect9.6.2, eq 9.14 (TODO: read mvg)
     DecomposeE(E21,R1,R2,t);  
 
     cv::Mat t1=t;
     cv::Mat t2=-t;
 
-    // Reconstruct with the 4 hyphoteses and check
+    // Reconstruct with the 4 hyphoteses and check: number check, winner check, parallax check
     vector<cv::Point3f> vP3D1, vP3D2, vP3D3, vP3D4;
     vector<bool> vbTriangulated1,vbTriangulated2,vbTriangulated3, vbTriangulated4;
     float parallax1,parallax2, parallax3, parallax4;
@@ -496,6 +508,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     int nGood3 = CheckRT(R1,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D3, 4.0*mSigma2, vbTriangulated3, parallax3);
     int nGood4 = CheckRT(R2,t2,mvKeys1,mvKeys2,mvMatches12,vbMatchesInliers,K, vP3D4, 4.0*mSigma2, vbTriangulated4, parallax4);
 
+    // check 1: GoodPoint number ratio检查(>90%)和显著优秀方案检查(只接受一种motion方案明显优于其他方案的情况)
     int maxGood = max(nGood1,max(nGood2,max(nGood3,nGood4)));
 
     R21 = cv::Mat();
@@ -503,6 +516,7 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
 
     int nMinGood = max(static_cast<int>(0.9*N),minTriangulated);
 
+    // 统计四种motion方案中GoodPoint占比较大的方案数目，如果只有一个占比较大，则接受该方案，否则拒绝所有方案
     int nsimilar = 0;
     if(nGood1>0.7*maxGood)
         nsimilar++;
@@ -513,12 +527,13 @@ bool Initializer::ReconstructF(vector<bool> &vbMatchesInliers, cv::Mat &F21, cv:
     if(nGood4>0.7*maxGood)
         nsimilar++;
 
-    // If there is not a clear winner or not enough triangulated points reject initialization
+    // If there is not a clear winner or not enough triangulated points(三角化成功率超过90%), reject initialization
     if(maxGood<nMinGood || nsimilar>1)
     {
         return false;
     }
 
+    // check 2: 帧间视差检查（大于1度）
     // If best reconstruction has enough parallax initialize
     if(maxGood==nGood1)
     {
@@ -577,6 +592,7 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
         if(vbMatchesInliers[i])
             N++;
 
+    // how to generate 8 hypothesis???
     // We recover 8 motion hypotheses using the method of Faugeras et al.
     // Motion and structure from motion in a piecewise planar environment.
     // International Journal of Pattern Recognition and Artificial Intelligence, 1988
@@ -693,6 +709,7 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     vector<cv::Point3f> bestP3D;
     vector<bool> bestTriangulated;
 
+    // 方案选择: 和Ｆ检查方案类似，都是使用CheckRT方法确定GoodPoint数目和帧间parallax
     // Instead of applying the visibility constraints proposed in the Faugeras' paper (which could fail for points seen with low parallax)
     // We reconstruct all hypotheses and check in terms of triangulated points and parallax
     for(size_t i=0; i<8; i++)
@@ -718,6 +735,11 @@ bool Initializer::ReconstructH(vector<bool> &vbMatchesInliers, cv::Mat &H21, cv:
     }
 
 
+    // 通过检查的条件：
+    // 1. 只有一个显著优秀的方案(次优方案的GoodPoint的数目少于最优的75%)
+    // 2. 帧间视差角大于阈值
+    // 3. 最优方案的GoodPoint数目大于手动设定的阈值
+    // 4. 最优方案的GoodPoint的占比大于90%
     if(secondBestGood<0.75*bestGood && bestParallax>=minParallax && bestGood>minTriangulated && bestGood>0.9*N)
     {
         vR[bestSolutionIdx].copyTo(R21);
@@ -735,6 +757,7 @@ void Initializer::Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, 
 {
     cv::Mat A(4,4,CV_32F);
 
+    // derivated from：　skew(kp1) * P * x3D = 0
     A.row(0) = kp1.pt.x*P1.row(2)-P1.row(0);
     A.row(1) = kp1.pt.y*P1.row(2)-P1.row(1);
     A.row(2) = kp2.pt.x*P2.row(2)-P2.row(0);
@@ -746,6 +769,12 @@ void Initializer::Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, 
     x3D = x3D.rowRange(0,3)/x3D.at<float>(3);
 }
 
+/// VNoramlizedPoints: (x - meanX) / meanDevX
+/// T:
+/// 1 / meanDevX, 0, -meanX / meanDevX,
+/// 0, 1 / meanDevY, -meanY / meanDevY,
+/// 0, 0, 1
+/// X_normalized = T * X
 void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T)
 {
     float meanX = 0;
@@ -763,11 +792,13 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
     meanX = meanX/N;
     meanY = meanY/N;
 
+    // similar with std (not square but fabs)
     float meanDevX = 0;
     float meanDevY = 0;
 
     for(int i=0; i<N; i++)
     {
+        // x - meanX
         vNormalizedPoints[i].x = vKeys[i].pt.x - meanX;
         vNormalizedPoints[i].y = vKeys[i].pt.y - meanY;
 
@@ -783,6 +814,7 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
 
     for(int i=0; i<N; i++)
     {
+        // (x - meanX) / meanDevX
         vNormalizedPoints[i].x = vNormalizedPoints[i].x * sX;
         vNormalizedPoints[i].y = vNormalizedPoints[i].y * sY;
     }
@@ -795,6 +827,16 @@ void Initializer::Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2
 }
 
 
+// vMatches12(I): all tracked correspondences in tracking step
+// vbMatchesInliers(I): all inliers in H / F model calculation
+// th2: 重投影误差阈值
+// vCosParallax: 记录了通过三重检查的点的cosParallax
+// vbGood: 记录了通过三重检查的点中哪些点的视差角较大
+// parallax: camera 1和camera 2的视差角(所有通过三重检查的特征点中的最大视差角或者当通过的点数超过50时就认用第50大的视差角作为帧间视差角)
+// 返回值： 通过三重检查的三角化点的数目
+// 流程概述：　
+// 1. 三角化之后分别进行三角化有效性检查，深度有效性检查（只检查视差较大的点），重投影误差检查
+// 2. 对于通过检查的点进行一些信息收集（主要是计算出camera1和camera2的视差角）
 int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
                        const vector<Match> &vMatches12, vector<bool> &vbMatchesInliers,
                        const cv::Mat &K, vector<cv::Point3f> &vP3D, float th2, vector<bool> &vbGood, float &parallax)
@@ -815,6 +857,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     cv::Mat P1(3,4,CV_32F,cv::Scalar(0));
     K.copyTo(P1.rowRange(0,3).colRange(0,3));
 
+    // Camera 1 optical center coordinate in Camera 1 frame 
     cv::Mat O1 = cv::Mat::zeros(3,1,CV_32F);
 
     // Camera 2 Projection Matrix K[R|t]
@@ -823,12 +866,15 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     t.copyTo(P2.rowRange(0,3).col(3));
     P2 = K*P2;
 
+    // Camera 2 optical center coordinate in Camera 1 frame 
     cv::Mat O2 = -R.t()*t;
 
     int nGood=0;
 
+    // vMatches12: all tracked correspondences in tracking step
     for(size_t i=0, iend=vMatches12.size();i<iend;i++)
     {
+        // vbMatchesInliers: all inliers in H / F model calculation
         if(!vbMatchesInliers[i])
             continue;
 
@@ -838,12 +884,14 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
 
         Triangulate(kp1,kp2,P1,P2,p3dC1);
 
+        // check 1: 三角化失败就跳过后面的处理
         if(!isfinite(p3dC1.at<float>(0)) || !isfinite(p3dC1.at<float>(1)) || !isfinite(p3dC1.at<float>(2)))
         {
             vbGood[vMatches12[i].first]=false;
             continue;
         }
 
+        // check 2: 视差角较大时三角化点处于相机前侧(２个相机)
         // Check parallax
         cv::Mat normal1 = p3dC1 - O1;
         float dist1 = cv::norm(normal1);
@@ -851,6 +899,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         cv::Mat normal2 = p3dC1 - O2;
         float dist2 = cv::norm(normal2);
 
+        // 三角化点和两个相机光心连线的夹角余弦值，可表示像个相机观测三角化点的视角差异
         float cosParallax = normal1.dot(normal2)/(dist1*dist2);
 
         // Check depth in front of first camera (only if enough parallax, as "infinite" points can easily go to negative depth)
@@ -863,6 +912,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         if(p3dC2.at<float>(2)<=0 && cosParallax<0.99998)
             continue;
 
+        // check 3: 重投影误差检查　
         // Check reprojection error in first image
         float im1x, im1y;
         float invZ1 = 1.0/p3dC1.at<float>(2);
@@ -871,6 +921,7 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
 
         float squareError1 = (im1x-kp1.pt.x)*(im1x-kp1.pt.x)+(im1y-kp1.pt.y)*(im1y-kp1.pt.y);
 
+        // 为什么重投影误差阈值是2*sigma???
         if(squareError1>th2)
             continue;
 
@@ -885,18 +936,24 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
         if(squareError2>th2)
             continue;
 
+        // vCosParallax: 记录了通过三重检查的点的cosParallax
         vCosParallax.push_back(cosParallax);
         vP3D[vMatches12[i].first] = cv::Point3f(p3dC1.at<float>(0),p3dC1.at<float>(1),p3dC1.at<float>(2));
+        // 通过三重检查的三角化点的数目
         nGood++;
 
+        // vbGood: 记录了通过三重检查的点中哪些点的视差角较大
+        // magic number: 0.99998????
         if(cosParallax<0.99998)
             vbGood[vMatches12[i].first]=true;
     }
 
+    // parallax: camera 1和camera 2的视差角(所有通过三重检查的特征点中的最大视差角或者当通过的点数超过50时就认用第50大的视差角作为帧间视差角)
     if(nGood>0)
     {
         sort(vCosParallax.begin(),vCosParallax.end());
 
+        // magic number: 50???
         size_t idx = min(50,int(vCosParallax.size()-1));
         parallax = acos(vCosParallax[idx])*180/CV_PI;
     }
@@ -906,13 +963,14 @@ int Initializer::CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::Ke
     return nGood;
 }
 
+// mvg sect9.6.2, eq 9.14
 void Initializer::DecomposeE(const cv::Mat &E, cv::Mat &R1, cv::Mat &R2, cv::Mat &t)
 {
     cv::Mat u,w,vt;
     cv::SVD::compute(E,w,u,vt);
 
     u.col(2).copyTo(t);
-    t=t/cv::norm(t);
+    t=t/cv::norm(t); // no scale
 
     cv::Mat W(3,3,CV_32F,cv::Scalar(0));
     W.at<float>(0,1)=-1;

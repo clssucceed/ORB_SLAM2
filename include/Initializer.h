@@ -63,6 +63,12 @@ private:
 
     void Triangulate(const cv::KeyPoint &kp1, const cv::KeyPoint &kp2, const cv::Mat &P1, const cv::Mat &P2, cv::Mat &x3D);
 
+    /// VNoramlizedPoints: (x - meanX) / meanDevX
+    /// T:
+    /// 1 / meanDevX, 0, -meanX / meanDevX,
+    /// 0, 1 / meanDevY, -meanY / meanDevY,
+    /// 0, 0, 1
+    /// X_normalized = T * X
     void Normalize(const vector<cv::KeyPoint> &vKeys, vector<cv::Point2f> &vNormalizedPoints, cv::Mat &T);
 
     int CheckRT(const cv::Mat &R, const cv::Mat &t, const vector<cv::KeyPoint> &vKeys1, const vector<cv::KeyPoint> &vKeys2,
@@ -78,6 +84,7 @@ private:
     // Keypoints from Current Frame (Frame 2)
     vector<cv::KeyPoint> mvKeys2;
 
+    // 根据传入的vMatches12维护mvMatches12和mvbMatched1(后面保持不变)
     // Current Matches from Reference to Current
     vector<Match> mvMatches12;
     vector<bool> mvbMatched1;
@@ -91,7 +98,7 @@ private:
     // Ransac max iterations
     int mMaxIterations;
 
-    // Ransac sets
+    // Ransac sets (mMaxIterations, 8)
     vector<vector<size_t> > mvSets;   
 
 };

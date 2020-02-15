@@ -28,3 +28,9 @@ lib/
 doc/html/
 
 doc/latex/
+
+.idea/
+
+cmake-build-debug/
+
+cmake_modules/

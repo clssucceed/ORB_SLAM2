@@ -25,6 +25,7 @@
 #include <mutex>
 #include <thread>
 #include <cstdlib>
+#include <zconf.h>
 
 using namespace std;
 

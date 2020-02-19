@@ -23,6 +23,7 @@
 #include <thread>
 #include <pangolin/pangolin.h>
 #include <iomanip>
+#include <zconf.h>
 
 namespace ORB_SLAM2
 {

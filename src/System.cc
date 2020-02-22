@@ -70,6 +70,7 @@ System::System(const string &strVocFile,
     cout << endl
          << "Loading ORB Vocabulary. This could take a while..." << endl;
 
+    // 生成默认配置的BoW 
     mpVocabulary = new ORBVocabulary();
     bool bVocLoad = mpVocabulary->loadFromTextFile(strVocFile);
     if (!bVocLoad)

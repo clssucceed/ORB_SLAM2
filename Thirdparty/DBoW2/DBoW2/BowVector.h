@@ -33,6 +33,7 @@ enum LNorm
 };
 
 /// Weighting type
+// Question: 还没有看懂
 enum WeightingType
 {
   TF_IDF,
@@ -52,6 +53,7 @@ enum ScoringType
   DOT_PRODUCT,
 };
 
+// map<word_id, score> for a frame: score = word_number * word_weight
 /// Vector of words to represent images
 class BowVector: 
 	public std::map<WordId, WordValue>

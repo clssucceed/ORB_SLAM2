@@ -51,6 +51,7 @@ public:
    * @param L depth levels
    * @param weighting weighting type
    * @param scoring scoring type
+   * BoW的默认配置
    */
   TemplatedVocabulary(int k = 10, int L = 5, 
     WeightingType weighting = TF_IDF, ScoringType scoring = L1_NORM);
@@ -1123,7 +1124,7 @@ void TemplatedVocabulary<TDescriptor,F>::transform(
 
 // --------------------------------------------------------------------------
 
-template<class TDescriptor, class F> 
+template<class TDescriptor, class F>
 void TemplatedVocabulary<TDescriptor,F>::transform(
   const std::vector<TDescriptor>& features,
   BowVector &v, FeatureVector &fv, int levelsup) const
@@ -1145,6 +1146,7 @@ void TemplatedVocabulary<TDescriptor,F>::transform(
   if(m_weighting == TF || m_weighting == TF_IDF)
   {
     unsigned int i_feature = 0;
+    // 遍历所有一张图片的所有features生成BoWVector
     for(fit = features.begin(); fit < features.end(); ++fit, ++i_feature)
     {
       WordId id;
@@ -1152,11 +1154,15 @@ void TemplatedVocabulary<TDescriptor,F>::transform(
       WordValue w; 
       // w is the idf value if TF_IDF, 1 if TF
       
+      // feature+BoW -> word+weight
       transform(*fit, id, w, &nid, levelsup);
       
       if(w > 0) // not stopped
       { 
+        // 将pair<word_id, word_weight>加入到map<word_id, score>中
+        // word_number * word_weight
         v.addWeight(id, w);
+        // 将pair<node_id, local_feature_id>加入到map<node_id, vector<local_feature_id>>中  
         fv.addFeature(nid, i_feature);
       }
     }
@@ -1214,6 +1220,17 @@ void TemplatedVocabulary<TDescriptor,F>::transform
 
 // --------------------------------------------------------------------------
 
+/// @brief
+/// 分层遍历Bag-of-Words的整棵树找到与feature相似度最高的word，返回word_id,
+/// weight
+/// @tparam TDescriptor
+/// @tparam F
+/// @param feature
+/// @param word_id
+/// @param weight:
+/// 返回的word对应的weight.每个word会根据其训练时分配到的点的数目以及所处的level来决定其weight
+/// @param nid
+/// @param levelsup
 template<class TDescriptor, class F>
 void TemplatedVocabulary<TDescriptor,F>::transform(const TDescriptor &feature, 
   WordId &word_id, WordValue &weight, NodeId *nid, int levelsup) const

@@ -156,6 +156,17 @@ bool ORBmatcher::CheckDistEpipolarLine(const cv::KeyPoint &kp1,const cv::KeyPoin
     return dsqr<3.84*pKF2->mvLevelSigma2[kp2.octave];
 }
 
+/**
+ * @brief 通过保存在FeatureVector中的BoW信息完成特征匹配
+ * 1. BoW信息可以加速这一过程: 关键帧中的每个特征只需要和当前帧中属于同一个word(BoW)的特征进行比较来寻找最佳匹配
+ * 2. 为了减少错误匹配，增加了如下两个检查逻辑:
+ * 2.1 最优匹配必须比次优匹配优秀很多才认为是正确匹配(最优匹配的汉明距离小于次优匹配汉明距离的60%)
+ * 2.2 所有成功匹配在当前帧和关键帧上发生的旋转角度是相近的
+ * @param pKF: key frame info
+ * @param F: current frame info
+ * @param vpMapPointMatches: 输出的成功匹配，vector<MapPoint*>, index: local feature id of F．
+ * @return
+ */
 int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPointMatches)
 {
     const vector<MapPoint*> vpMapPointsKF = pKF->GetMapPointMatches();
@@ -166,6 +177,9 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
 
     int nmatches=0;
 
+    // 成功匹配的旋转角度的直方图:
+    // index是hist bin index(0~29),
+    // 每个元素vector<int>表示落在每个bin的当前帧特征的local feature id
     vector<int> rotHist[HISTO_LENGTH];
     for(int i=0;i<HISTO_LENGTH;i++)
         rotHist[i].reserve(500);
@@ -184,6 +198,7 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
             const vector<unsigned int> vIndicesKF = KFit->second;
             const vector<unsigned int> vIndicesF = Fit->second;
 
+            // pKF和F中属于同一个node的两个feature_list进行暴力匹配
             for(size_t iKF=0; iKF<vIndicesKF.size(); iKF++)
             {
                 const unsigned int realIdxKF = vIndicesKF[iKF];
@@ -198,10 +213,15 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
 
                 const cv::Mat &dKF= pKF->mDescriptors.row(realIdxKF);
 
+                // 最优匹配的汉明距离
                 int bestDist1=256;
+                // 最优匹配的当前帧索引(local feature id)
                 int bestIdxF =-1 ;
+                // 次优匹配的汉明距离
                 int bestDist2=256;
 
+                // 属于当前word的关键帧中的某个MapPoint包含的Feature
+                // 和当前帧中属于相同word的所有Feature进行比较找出最佳匹配
                 for(size_t iF=0; iF<vIndicesF.size(); iF++)
                 {
                     const unsigned int realIdxF = vIndicesF[iF];
@@ -211,6 +231,7 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
 
                     const cv::Mat &dF = F.mDescriptors.row(realIdxF);
 
+                    // 计算两个Feature的相似性（汉明距离）
                     const int dist =  DescriptorDistance(dKF,dF);
 
                     if(dist<bestDist1)
@@ -229,12 +250,15 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
                 {
                     if(static_cast<float>(bestDist1)<mfNNratio*static_cast<float>(bestDist2))
                     {
+                        // 只有当最优匹配汉明距离小于阈值，并且最优匹配汉明距离比此优匹配汉明距离小很多(<60%)时才认为是正确匹配
                         vpMapPointMatches[bestIdxF]=pMP;
 
                         const cv::KeyPoint &kp = pKF->mvKeysUn[realIdxKF];
 
                         if(mbCheckOrientation)
                         {
+                            // 如果开启旋转角度检查，需要将成功匹配的先转角度rot更新到直方图rotHist中
+                            // angle: 旋转主方向对应的角度
                             float rot = kp.angle-F.mvKeys[bestIdxF].angle;
                             if(rot<0.0)
                                 rot+=360.0f;
@@ -266,16 +290,19 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
 
     if(mbCheckOrientation)
     {
+        // 旋转角度检查: 所有成功匹配的旋转角度应该是相近的
         int ind1=-1;
         int ind2=-1;
         int ind3=-1;
 
+        // 找出rotHist中排名前三的bin,索引号ind1, ind2, ind3
         ComputeThreeMaxima(rotHist,HISTO_LENGTH,ind1,ind2,ind3);
 
         for(int i=0; i<HISTO_LENGTH; i++)
         {
             if(i==ind1 || i==ind2 || i==ind3)
                 continue;
+            // 去除落在其他bin中的匹配    
             for(size_t j=0, jend=rotHist[i].size(); j<jend; j++)
             {
                 vpMapPointMatches[rotHist[i][j]]=static_cast<MapPoint*>(NULL);
@@ -284,6 +311,7 @@ int ORBmatcher::SearchByBoW(KeyFrame* pKF,Frame &F, vector<MapPoint*> &vpMapPoin
         }
     }
 
+    // 返回成功匹配的特征数目
     return nmatches;
 }
 
@@ -1641,7 +1669,7 @@ void ORBmatcher::ComputeThreeMaxima(vector<int>* histo, const int L, int &ind1, 
     }
 }
 
-
+// 计算汉明距离,即找出两个256bit的descriptor不同bit的数目
 // Bit set count operation from
 // http://graphics.stanford.edu/~seander/bithacks.html#CountBitsSetParallel
 int ORBmatcher::DescriptorDistance(const cv::Mat &a, const cv::Mat &b)
@@ -1654,6 +1682,7 @@ int ORBmatcher::DescriptorDistance(const cv::Mat &a, const cv::Mat &b)
     for(int i=0; i<8; i++, pa++, pb++)
     {
         unsigned  int v = *pa ^ *pb;
+        //　下面是一道经典的算法题，详见https://zhuanlan.zhihu.com/p/32899882
         v = v - ((v >> 1) & 0x55555555);
         v = (v & 0x33333333) + ((v >> 2) & 0x33333333);
         dist += (((v + (v >> 4)) & 0xF0F0F0F) * 0x1010101) >> 24;

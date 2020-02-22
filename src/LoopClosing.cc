@@ -132,6 +132,10 @@ bool LoopClosing::DetectLoop()
             continue;
         const DBoW2::BowVector &BowVec = pKF->mBowVec;
 
+        // 计算两个图像描述子{word, score}_m之间的相似度
+        // 相似度计算思想大致如下:
+        // 将其中相同word的weight相乘并且累加就是相似度,
+        // 两个图像描述子看到的场景越相似，相似度越高
         float score = mpORBVocabulary->score(CurrentBowVec, BowVec);
 
         if(score<minScore)

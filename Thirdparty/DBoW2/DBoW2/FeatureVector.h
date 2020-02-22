@@ -17,6 +17,9 @@
 
 namespace DBoW2 {
 
+// 正向索引: frame = map<node_id, vector<local_feature_id>>
+// ORBmatcher::searchByBoW中使用FeatureVector使得每个特征只需
+// 和另一张图片的中属于同一个node的特征进行匹配
 /// Vector of nodes with indexes of local features
 class FeatureVector: 
   public std::map<NodeId, std::vector<unsigned int> >

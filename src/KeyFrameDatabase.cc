@@ -72,7 +72,19 @@ void KeyFrameDatabase::clear()
     mvInvertedFile.resize(mpVoc->size());
 }
 
-
+/**
+ * @brief 从KFDatabase中检测出和pKF最相似的KFs作为Loop Candidates
+ * 大致过程如下：
+ * 1. 根据mvInvertedFile,即vector<list<KeyFrame*>>，vector索引是word_id找出所有和pKF有相同
+ *    word的KFs,并且这些KFs还需要和pKF不是connected的
+ * 2. 计算1中找出的所有KFs中sharing word数目最大值的0.8,记为sharing_word_number_th
+ * 3. 只计算sharing_word_number > sharing_word_number_th的KFs和pKF的score,只保留大于minScore的
+ * 4. Question：通过Covisibity计算acc score没有理解
+ * 5. 只返回acc score排名前25%的KFs
+ * @param pKF
+ * @param minScore
+ * @return
+ */
 vector<KeyFrame*> KeyFrameDatabase::DetectLoopCandidates(KeyFrame* pKF, float minScore)
 {
     set<KeyFrame*> spConnectedKeyFrames = pKF->GetConnectedKeyFrames();

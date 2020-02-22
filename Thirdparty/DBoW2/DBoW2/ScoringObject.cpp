@@ -20,6 +20,7 @@ const double GeneralScoring::LOG_EPS = log(DBL_EPSILON); // FLT_EPSILON
 // ---------------------------------------------------------------------------
 // ---------------------------------------------------------------------------
 
+// 推导详见吴博课件
 double L1Scoring::score(const BowVector &v1, const BowVector &v2) const
 {
   BowVector::const_iterator v1_it, v2_it;

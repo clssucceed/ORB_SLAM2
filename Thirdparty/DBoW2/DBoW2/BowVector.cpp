@@ -59,6 +59,7 @@ void BowVector::addIfNotExist(WordId id, WordValue v)
 
 // --------------------------------------------------------------------------
 
+// map<word_id, word_value>: consider all word_value as a vector and normalize
 void BowVector::normalize(LNorm norm_type)
 {
   double norm = 0.0; 

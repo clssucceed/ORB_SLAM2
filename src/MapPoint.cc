@@ -312,11 +312,17 @@ cv::Mat MapPoint::GetDescriptor()
     return mDescriptor.clone();
 }
 
+/**
+ * @brief obtain local feature id in pKF of this MapPoint
+ * @param pKF
+ * @return
+ */
 int MapPoint::GetIndexInKeyFrame(KeyFrame *pKF)
 {
     unique_lock<mutex> lock(mMutexFeatures);
+    // check whether pkF is in mObservations(this observation can be visible in pKF)
     if(mObservations.count(pKF))
-        return mObservations[pKF];
+        return mObservations[pKF]; // local feature id in pKF
     else
         return -1;
 }

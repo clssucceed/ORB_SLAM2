@@ -123,7 +123,7 @@ protected:
     // Position in absolute coordinates
     cv::Mat mWorldPos;
 
-    // Keyframes observing the point and associated index in keyframe
+    // Keyframes observing the point and associated index in keyframe(local feature id in kf)
     std::map<KeyFrame *, size_t> mObservations;
 
     // Mean viewing direction

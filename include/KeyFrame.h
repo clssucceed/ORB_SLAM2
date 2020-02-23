@@ -169,12 +169,16 @@ public:
     DBoW2::BowVector mBowVec;
     DBoW2::FeatureVector mFeatVec;
 
-    // Scale
+    // Scale info
+    // 这些信息都是在OrbExtractor构造函数中计算出来然后一路传递进来的(OrbExtractor->Frame->KeyFrame)
     const int mnScaleLevels;
     const float mfScaleFactor;
     const float mfLogScaleFactor;
+    // 基于传进来的金字塔层数mnScaleLevels和金字塔比例系数mfScaleFactor计算每一层金字塔相对于
+    // 第0层金字塔啊的比例系数mvScaleFactor和比例系数的平方mvLevelSigma2
     const std::vector<float> mvScaleFactors;
     const std::vector<float> mvLevelSigma2;
+    // inverse of mvLevelSigma2
     const std::vector<float> mvInvLevelSigma2;
 
     /**

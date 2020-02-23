@@ -412,6 +412,8 @@ ORBextractor::ORBextractor(int _nfeatures, float _scaleFactor, int _nlevels,
     nfeatures(_nfeatures), scaleFactor(_scaleFactor), nlevels(_nlevels),
     iniThFAST(_iniThFAST), minThFAST(_minThFAST)
 {
+    // 基于传进来的金字塔层数nlevels和金字塔比例系数scaleFactor计算每一层金字塔相对于
+    // 第0层金字塔啊的比例系数mvScaleFactor和比例系数的平方mvLevelSigma2
     mvScaleFactor.resize(nlevels);
     mvLevelSigma2.resize(nlevels);
     mvScaleFactor[0]=1.0f;

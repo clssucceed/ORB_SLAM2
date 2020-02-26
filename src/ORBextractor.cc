@@ -1127,6 +1127,12 @@ void ORBextractor::ComputePyramid(cv::Mat image)
         {
             resize(mvImagePyramid[level-1], mvImagePyramid[level], sz, 0, 0, INTER_LINEAR);
 
+            // border常见的处理方式有三种
+            // 1.拷贝最后一列
+            // 2.abcd | dcba
+            // 3.abcd | cba
+            // 标定一般选择方案2,3;跟踪一般选择1
+            // border如果处理不好，很多边界特征跟踪效果会变差很多
             copyMakeBorder(mvImagePyramid[level], temp, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD, EDGE_THRESHOLD,
                            BORDER_REFLECT_101+BORDER_ISOLATED);            
         }
